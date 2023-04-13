@@ -1,59 +1,59 @@
 import os
-import openpyxl
+import pandas as pd
 
-# 要递归查找的文件夹路径列表
-path_list = ["C:/CSMS/back/fd/dss/f", "D:/", "E:/"]
+# 定义需要递归查找的路径列表
+paths = ["C:/CSMS/back/fd/dss/f", "D:/", "E:/"]
 
-# 需要查找的文件类型列表
-extension_list = [".java", ".sql", ".jsp", ".PLSQL"]
+# 定义需要查找的文件类型
+file_types = (".java", ".sql", ".jsp", ".PLSQL")
 
-# 包含的字符列表
-include_list = ["PRD_18661", "PRD_18568"]
+# 定义需要查找的字符串列表
+search_strings = ["PRD_18661", "PRD_18568"]
 
-# 初始化结果列表
-result_list = []
+# 定义输出文件名
+output_file = "output.xlsx"
 
-# 定义函数，递归查找符合条件的文件并添加到结果列表
-def search_files(path):
+# 定义列名列表
+columns = ["包含的字符", "类型", "文件名", "路径", "Danny", "IFP_23_RL02_PRD_18861"]
+
+# 定义结果列表
+result = []
+
+# 递归查找文件并处理
+def search_files(path, search_strings, file_types):
     for root, dirs, files in os.walk(path):
-        for filename in files:
-            if filename.endswith(tuple(extension_list)):
-                filepath = os.path.join(root, filename)
-                with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
-                    if any(x in content for x in include_list):
-                        # 获取文件名和文件路径，去掉SourceTree之前的内容
-                        filename_only = os.path.basename(filepath)
-                        filepath_only = filepath.split("SourceTree")[1]
-                        # 添加到结果列表
-                        result_list.append([filename_only, filepath_only])
+        for file in files:
+            # 判断文件类型
+            if file.endswith(file_types):
+                # 判断文件内容是否包含搜索字符串
+                with open(os.path.join(root, file), "rb") as f:
+                    content = f.read().decode(errors="ignore")  # 忽略无法解码的字符
+                    if any(search_string in content for search_string in search_strings):
+                        # 获取文件名和文件路径
+                        file_name = os.path.basename(file)
+                        file_path = os.path.join(root, file)[len("SourceTree"):]
 
-# 遍历文件夹列表，调用函数递归查找符合条件的文件
-for path in path_list:
-    search_files(path)
+                        # 判断文件类型并设置第二列的值
+                        if file.endswith((".jsp", ".java")):
+                            col2 = "CSMS"
+                        else:
+                            col2 = "CIS"
 
-# 去重，按照文件类型排序
-result_list = sorted(list(set(tuple(x) for x in result_list)), key=lambda x: (x[1].split(".")[-1], x[1]))
+                        # 添加到结果列表中
+                        result.append([search_strings[0] + "或" + search_strings[1], col2, file_name, file_path, "Danny", "IFP_23_RL02_PRD_18861"])
 
-# 创建Excel表格并写入结果
-wb = openpyxl.Workbook()
-ws = wb.active
-ws.title = "Search Results"
+# 查找文件并处理
+for path in paths:
+    search_files(path, search_strings, file_types)
 
-# 写入表头
-header = ["No.", "Type", "File Name", "File Path", "Danny", "IFP_23_RL02_PRD_18861"]
-ws.append(header)
+# 将结果去重并按照文件类型排序
+df = pd.DataFrame(result, columns=columns)
+df.drop_duplicates(subset=["文件名", "路径"], keep="first", inplace=True)
+df.sort_values(by=["类型", "文件名"], ascending=True, inplace=True)
 
-# 写入数据
-for i, row in enumerate(result_list):
-    # 第一列序号从1开始
-    row.insert(0, i+1)
-    # 如果是.jsp或者.java，则展示CSMS，其他展示CIS
-    row[1] = "CSMS" if row[1].endswith((".jsp", ".java")) else "CIS"
-    # 添加Danny和IFP_23_RL02_PRD_18861
-    row.append("Danny")
-    row.append("IFP_23_RL02_PRD_18861")
-    ws.append(row)
-
-# 保存Excel表格
-wb.save("search_results.xlsx")
+# 将结果写入Excel表格
+df.to_excel(output_file, index_label="序号", startrow=1)
+# 写入包含的字符到第一行
+with pd.ExcelWriter(output_file, mode='a') as writer:
+    df_char = pd.DataFrame({"包含的字符": [search_strings[0] + "或" + search_strings[1]]})
+    df_char.to_excel(writer, index_label="序号")
