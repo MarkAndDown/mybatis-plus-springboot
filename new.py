@@ -1,40 +1,39 @@
 import os
 import csv
 
-# 指定要查找的路径
-paths = ["C:/CSMS", "D:/", "E:/"]
+# 多个文件夹路径
+paths = ['C:/CSMS', 'D:/', 'E:/']
+# 指定后缀名
+extensions = ['.java', '.sql', '.jsp', '.PLSQL']
+# 指定查找的字符串
+search_str = 'PRD_18661'
 
-# 指定要查找的文件后缀名
-suffixes = [".java", ".sql", ".jsp", ".PLSQL"]
+# 存储结果的列表
+result = []
 
-# 指定要查找的字符串
-target_str = "PRD_18661"
+# 递归查找函数
+def search_files(path):
+    for file in os.listdir(path):
+        file_path = os.path.join(path, file)
+        if os.path.isdir(file_path):
+            search_files(file_path)
+        elif os.path.isfile(file_path) and any(file_path.endswith(ext) for ext in extensions):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                if search_str in f.read():
+                    # 去重
+                    if file_path not in result:
+                        result.append(file_path)
 
-# 用于存储文件名和文件路径的列表
-file_list = []
-
-# 递归查找符合要求的文件
+# 遍历路径列表
 for path in paths:
-    for root, dirs, files in os.walk(path):
-        for filename in files:
-            # 只查找指定后缀名的文件
-            if filename.endswith(tuple(suffixes)):
-                file_path = os.path.join(root, filename)
-                with open(file_path, "r", encoding="utf-8") as f:
-                    file_content = f.read()
-                    # 如果文件内容包含目标字符串，则将文件路径和文件名添加到列表中
-                    if target_str in file_content:
-                        file_list.append((filename, file_path))
+    search_files(path)
 
-# 去重
-file_list = list(set(file_list))
+# 根据文件类型排序
+result.sort(key=lambda x: os.path.splitext(x)[1])
 
-# 按照后缀名排序
-file_list.sort(key=lambda x: suffixes.index(os.path.splitext(x[0])[1]))
-
-# 将结果写入 csv 文件
-with open("result.csv", "w", encoding="utf-8", newline="") as f:
+# 写入 csv 文件
+with open('result.csv', 'w', newline='', encoding='utf-8') as f:
     writer = csv.writer(f)
-    writer.writerow(["File Name", "File Path"])
-    for file_info in file_list:
-        writer.writerow(file_info)
+    writer.writerow(['文件路径', '文件名'])
+    for file_path in result:
+        writer.writerow([os.path.dirname(file_path), os.path.basename(file_path)])
