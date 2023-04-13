@@ -1,29 +1,54 @@
 import os
 import csv
 
-file_exts = ['.java', '.sql', '.jsp', '.PLSQL']  # 需要搜索的文件后缀
-search_str = 'PRD_18661'  # 需要搜索的字符串
-search_dirs = ['C:/CSMS/back', 'D:', 'E:']  # 需要搜索的目录
+# 定义要查找的路径
+search_paths = ["C:/CSMS/back/fd", "D:/", "E:/"]
+# 定义要查找的文件类型后缀
+extensions = [".java", ".sql", ".jsp", ".PLSQL"]
+# 定义要查找的字符串
+target_string = "PRD_18661"
 
-result = set()
+# 定义输出的csv文件名和列名
+output_file = "search_result.csv"
+field_names = ["序号", "系统", "文件名", "文件路径"]
 
-for search_dir in search_dirs:
-    for root, dirs, files in os.walk(search_dir):
-        for filename in files:
-            file_ext = os.path.splitext(filename)[1]
-            if file_ext in file_exts:
-                filepath = os.path.join(root, filename)
-                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                    if search_str in content:
-                        result.add((filename, filepath))
+# 定义系统名映射
+system_map = {
+    ".jsp.java": "CSMS",
+}
 
-# 将结果按照文件后缀排序
-result = sorted(result, key=lambda x: file_exts.index(os.path.splitext(x[0])[1]))
+# 初始化行号
+row_number = 1
 
-# 将结果写入CSV文件
-with open('result.csv', 'w', newline='', encoding='utf-8') as f:
+# 定义输出结果的列表
+result_list = []
+
+# 遍历所有路径和文件
+for search_path in search_paths:
+    for dirpath, dirnames, filenames in os.walk(search_path):
+        for filename in filenames:
+            # 判断文件后缀是否符合要求
+            if any(filename.endswith(ext) for ext in extensions):
+                file_path = os.path.join(dirpath, filename)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                        if target_string in content:
+                            system_name = "CIS"
+                            for ext in system_map:
+                                if filename.endswith(ext):
+                                    system_name = system_map[ext]
+                                    break
+                            result_list.append([row_number, system_name, filename, file_path])
+                            row_number += 1
+                except:
+                    pass
+
+# 对结果按照文件类型排序
+result_list.sort(key=lambda x: extensions.index(os.path.splitext(x[2])[1]))
+
+# 输出结果到csv文件
+with open(output_file, "w", encoding="utf-8", newline='') as f:
     writer = csv.writer(f)
-    writer.writerow(['文件名', '文件路径'])
-    for item in result:
-        writer.writerow(item)
+    writer.writerow(field_names)
+    writer.writerows(result_list)
