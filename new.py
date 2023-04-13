@@ -1,61 +1,57 @@
 import os
 import csv
 
-# 要搜索的文件类型
-file_types = ['.java', '.sql', '.jsp', '.PLSQL']
+# Define the paths to search
+paths_to_search = ["C:/CSMS/back/fd/dss/f", "D:/", "E:/"]
 
-# 要搜索的路径
-search_paths = ['C:/CSMS/back/fd/dss/f', 'D:/', 'E:/']
+# Define the file extensions to look for
+file_extensions = [".java", ".sql", ".jsp", ".PLSQL"]
 
-# 要搜索的字符串
-search_str = 'PRD_18661'
+# Define the string to search for in the files
+search_string = "PRD_18661"
 
-# 保存结果的文件名
-output_filename = 'result.csv'
+# Define the CSV file name and headers
+csv_file_name = "file_data.csv"
+csv_headers = ["No.", "Type", "Name", "Path", "Author", "Title"]
 
-# 递归搜索路径下所有符合要求的文件
-def search_files(path):
-    files = []
-    for root, _, filenames in os.walk(path):
+# Initialize a list to store the file data
+file_data = []
+
+# Define a function to process each file found
+def process_file(file_path):
+    # Check if file has the desired extension
+    if os.path.splitext(file_path)[1] in file_extensions:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            # Check if file contains the desired string
+            if search_string in f.read():
+                # Extract the desired data from the file path
+                path_parts = file_path.split("/")
+                file_name = path_parts[-1]
+                file_path = "/".join(path_parts[4:])
+                file_type = os.path.splitext(file_name)[1]
+                if file_type == ".jsp" or file_type == ".java":
+                    file_type_display = "CSMS"
+                else:
+                    file_type_display = "CIS"
+                author = "Danny"
+                title = "IFP_23_RL02_PRD_18861"
+                # Add the file data to the list
+                file_data.append([len(file_data)+1, file_type_display, file_name, file_path, author, title])
+
+# Recursively search for files in the specified paths
+for path in paths_to_search:
+    for dirpath, dirnames, filenames in os.walk(path):
         for filename in filenames:
-            if filename.endswith(tuple(file_types)):
-                files.append(os.path.join(root, filename))
-    return files
+            process_file(os.path.join(dirpath, filename))
 
-# 判断文件中是否包含搜索字符串
-def is_file_contain_str(file_path):
-    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-        contents = f.read()
-        return search_str in contents
+# Remove duplicates from file data
+file_data = list(set(map(tuple, file_data)))
 
-# 获取文件类型
-def get_file_type(file_path):
-    ext = os.path.splitext(file_path)[1]
-    return ext.lower()
+# Sort the file data by file type
+file_data.sort(key=lambda x: x[1])
 
-# 判断文件类型是否在要搜索的类型列表中
-def is_file_type_in_types(file_type):
-    return file_type in file_types
-
-# 主函数
-def main():
-    result = []
-    index = 1
-    for path in search_paths:
-        files = search_files(path)
-        for file_path in files:
-            file_type = get_file_type(file_path)
-            if is_file_type_in_types(file_type) and is_file_contain_str(file_path):
-                row = [index, 'CSMS' if file_type == '.jsp.java' else 'CIS', os.path.basename(file_path), os.path.dirname(file_path)]
-                result.append(row)
-                index += 1
-    result = sorted(result, key=lambda x: file_types.index(get_file_type(x[2])))
-    # 写入csv文件
-    with open(output_filename, 'w', encoding='utf-8', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['序号', '系统名称', '文件名', '文件路径'])
-        for row in result:
-            writer.writerow(row)
-
-if __name__ == '__main__':
-    main()
+# Write the file data to a CSV file
+with open(csv_file_name, "w", newline="", encoding="utf-8") as f:
+    csv_writer = csv.writer(f)
+    csv_writer.writerow(csv_headers)
+    csv_writer.writerows(file_data)
