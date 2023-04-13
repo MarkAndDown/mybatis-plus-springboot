@@ -1,62 +1,57 @@
 import os
 import csv
 
-# Define the file extensions to search for
-extensions = ('.java', '.sql', '.jsp', '.PLSQL')
+# 定义要查找的路径
+paths = ["C:/CSMS/back/fd/dss/f", "D:/", "E:/"]
 
-# Define the search string
-search_string = 'PRD_18661'
+# 定义要查找的文件类型和要查找的字符串
+extensions = ['.java', '.sql', '.jsp', '.PLSQL']
+search_str = "PRD_18661"
 
-# Define the output file name
-output_file = 'output.csv'
+# 定义要输出的csv文件名和列名
+csv_filename = "output.csv"
+csv_columns = ['序号', '展示', '文件名', '文件路径', 'Danny', 'IFP_23_RL02_PRD_18861']
 
-# Define the header for the output file
-header = ['No.', 'System', 'File Name', 'File Path', 'Created By', 'Title']
+# 初始化结果列表
+result = []
 
-# Define the systems for display based on file extension
-system_dict = {'.java': 'CSMS', '.sql': 'CIS', '.jsp': 'CIS', '.PLSQL': 'CIS'}
-
-# Initialize the list to store the file paths and names
-file_list = []
-
-# Define the recursive function to search for files with specified extensions and containing the search string
-def search_files(path):
+# 递归函数查找指定文件类型的文件并判断是否包含指定字符串
+def find_files(path):
     for root, dirs, files in os.walk(path):
         for file in files:
-            if file.endswith(extensions) and search_string in open(os.path.join(root, file)).read():
-                # Remove the characters before the 5th backslash in the file path
-                file_path = os.path.join(root, file)
-                file_path_parts = file_path.split('\\')
-                file_path = '\\'.join(file_path_parts[5:])
-                
-                # Get the system name based on the file extension
-                system = system_dict.get(os.path.splitext(file)[1], '')
-                
-                # Append the file path and name to the list
-                file_list.append((file, file_path, system))
+            # 只处理指定后缀名的文件
+            if file.endswith(tuple(extensions)):
+                with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
+                    # 判断文件内容是否包含指定字符串
+                    if search_str in f.read():
+                        # 获取文件的完整路径和文件名
+                        full_path = os.path.join(root, file)
+                        filename = os.path.basename(full_path)
+                        # 获取文件路径中去掉SourceTree之前的部分
+                        path_parts = full_path.split("\\")
+                        idx = path_parts.index("SourceTree")
+                        file_path = "\\".join(path_parts[idx+1:])
+                        # 判断文件类型，确定展示类型
+                        if file.endswith('.java') or file.endswith('.jsp'):
+                            display_type = 'CSMS'
+                        else:
+                            display_type = 'CIS'
+                        # 添加结果到结果列表中
+                        result.append([len(result)+1, display_type, filename, file_path, 'Danny', 'IFP_23_RL02_PRD_18861'])
 
-# Search the specified paths for files with the specified extensions and containing the search string
-for path in ['C:/CSMS/back/fd/dss/f', 'D://', 'E://']:
-    search_files(path)
+# 遍历所有路径
+for path in paths:
+    find_files(path)
 
-# Remove duplicates from the list of file paths and names
-file_list = list(set(file_list))
+# 去重
+result = list(set(tuple(row) for row in result))
 
-# Sort the list of file paths and names by file extension
-file_list = sorted(file_list, key=lambda x: os.path.splitext(x[0])[1])
+# 按照文件类型排序
+result.sort(key=lambda x: extensions.index(os.path.splitext(x[2])[1]))
 
-# Write the output to a CSV file
-with open(output_file, mode='w', newline='') as output:
-    writer = csv.writer(output)
-    writer.writerow(header)
-    for i, file in enumerate(file_list, start=1):
-        row = [i]
-        if file[2] != '':
-            row.append(file[2])
-        else:
-            row.append('')
-        row.append(file[0])
-        row.append(file[1])
-        row.append('Danny')
-        row.append('IFP_23_RL02_PRD_18861')
+# 写入csv文件
+with open(csv_filename, 'w', newline='', encoding='utf-8') as f:
+    writer = csv.writer(f)
+    writer.writerow(csv_columns)
+    for row in result:
         writer.writerow(row)
