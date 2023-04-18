@@ -16,7 +16,8 @@ esc_grant_type="client"
 
 # 获取access_token
 response=$(curl -x "$login_proxy" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=$login_client_id&client_secret=$login_client_secret&scope=$login_scope&grant_type=$login_grant_type" "$login_url")
-access_token=$(echo "$response" | jq -r '.access_token')
+#access_token=$(echo "$response" | jq -r '.access_token')
+access_token=$(echo $response | grep -o '"access_token":"[^"]*' | sed 's/"access_token":"//')
 
 # 发送第二个请求
 curl -X POST -H "Authorization: Bearer $access_token" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=$esc_client_id&client_secret=$esc_client_secret&scope=$esc_scope&grant_type=$esc_grant_type" "$esc_url" > 1.txt
