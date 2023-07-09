@@ -1,71 +1,62 @@
-import os
-import csv
+from git import Repo
+from datetime import datetime
 
-# 定义需要查找的路径
-paths = ["C:/CSMS/back/fd/dss/f", "D:/", "E:/"]
+# 指定本地Git仓库的路径
+repo_path = 'path/to/your/repository'
 
-# 定义需要查找的文件后缀和关键字
-file_exts = ['.java', '.sql', '.jsp', '.PLSQL']
-search_str = 'PRD_18661'
+# 打开Git仓库
+repo = Repo(repo_path)
 
-# 定义需要输出的文件名
-output_filename = 'output.csv'
+# 指定作者的名称
+author_name = 'Author Name'
 
-# 定义需要输出的列名
-fieldnames = ['Index', 'Project', 'Filename', 'Path', 'Author', 'Keyword']
+# 指定起始日期和结束日期
+start_date = datetime(2023, 1, 1)  # 指定起始日期
+end_date = datetime(2023, 12, 31)  # 指定结束日期
 
-# 定义用于去重的集合
-unique_files = set()
+# 创建集合来跟踪已打印的文件路径
+printed_files = set()
 
-# 定义计数器
-count = 0
+# 获取Git日志
+log = repo.git.log('--author=' + author_name, '--name-status', '--since=' + start_date.strftime('%Y-%m-%d'), '--until=' + end_date.strftime('%Y-%m-%d'))
 
-# 定义项目名称字典
-project_dict = {
-    '.java': 'CSMS',
-    '.jsp': 'CSMS',
-    '.sql': 'CIS',
-    '.PLSQL': 'CIS'
-}
-
-# 定义路径中需要删除的部分
-path_to_remove = 'SourceTree'
-
-# 定义作者名
-author_name = 'Danny'
-
-# 定义关键字
-keyword = 'IFP_23_RL02_PRD_18861'
-
-# 定义输出文件的打开方式
-with open(output_filename, mode='w', newline='') as output_file:
-    writer = csv.DictWriter(output_file, fieldnames=fieldnames)
-    writer.writeheader()
-
-    for path in paths:
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                if any(file.endswith(ext) for ext in file_exts):
-                    file_path = os.path.join(root, file)
-                    if search_str in open(file_path, encoding="utf8").read():
-                        # 获取文件名和后缀
-                        filename, ext = os.path.splitext(file)
-                        # 获取项目名称
-                        project = project_dict.get(ext, '')
-                        # 去除路径中的部分
-                        path = root.split(path_to_remove, 1)[-1]
-                        # 如果路径已存在则跳过
-                        if (filename, path) in unique_files:
-                            continue
-                        else:
-                            unique_files.add((filename, path))
-                        # 写入csv文件
-                        count += 1
-                        writer.writerow({
-                            'Index': count,
-                            'Project': project,
-                            'Filename': filename,
-                            'Path': path,
-                            'Author': author_name,
-                            'Keyword': keyword
-                        })
+# 遍历日志条目
+for entry in log.split('\n\n'):
+    commit_info, file_changes = entry.split('\n', 1)
+    commit_hash, commit_message = commit_info.split('\n', 1)
+    file_changes = file_changes.strip().split('\n')
+    
+    print(f"提交ID: {commit_hash}")
+    print(f"提交消息: {commit_message}")
+    print("改动文件:")
+    for change in file_changes:
+        change_type, file_path = change.split('\t', 1)
+        if file_path not in printed_files:
+            print(f"  类型: {change_type}\t路径: {file_path}")
+            printed_files.add(file_path)
+            
+            # 读取文件内容
+            with open(file_path, 'r') as file:
+                content = file.read()
+                
+                # 提取注释含有"add"的行
+                print("注释含有'add'的行:")
+                for line in content.split('\n'):
+                    if line.strip().startswith('#') and 'add' in line:
+                        print(line)
+                        
+                # 提取注释含有"start"和"end"之间的代码块
+                print("注释含有'start'和'end'之间的代码块:")
+                start_found = False
+                for line in content.split('\n'):
+                    line = line.strip()
+                    if line.startswith('# start'):
+                        start_found = True
+                        print(line)
+                    elif line.startswith('# end'):
+                        start_found = False
+                        print(line)
+                    elif start_found:
+                        print(line)
+                
+    print('---')
