@@ -26,6 +26,10 @@ for entry in log.split('\n\n'):
     commit_hash, commit_message = commit_info.split('\n', 1)
     file_changes = file_changes.strip().split('\n')
     
+    # 检查是否有文件改动，如果没有则忽略本次commit
+    if len(file_changes) == 0:
+        continue
+    
     print(f"提交ID: {commit_hash}")
     print(f"提交消息: {commit_message}")
     print("改动文件:")
