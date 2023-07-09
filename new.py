@@ -17,26 +17,27 @@ end_date = datetime(2023, 12, 31)  # 指定结束日期
 # 创建集合来跟踪已打印的文件路径
 printed_files = set()
 
-# 获取Git日志
-log = repo.git.log('--author=' + author_name, '--name-status', '--since=' + start_date.strftime('%Y-%m-%d'), '--until=' + end_date.strftime('%Y-%m-%d'))
+# 获取Git提交记录
+commits = repo.iter_commits(since=start_date, until=end_date, author=author_name)
 
-# 遍历日志条目
-for entry in log.split('\n\n'):
-    commit_info, file_changes = entry.split('\n', 1)
-    commit_hash, commit_message = commit_info.split('\n', 1)
-    file_changes = file_changes.strip().split('\n')
+# 遍历提交记录
+for commit in commits:
+    # 获取提交信息
+    commit_hash = commit.hexsha
+    commit_message = commit.message.strip()
     
     # 检查是否有文件改动，如果没有则忽略本次commit
-    if len(file_changes) == 0:
+    if len(commit.stats.files) == 0:
         continue
     
     print(f"提交ID: {commit_hash}")
     print(f"提交消息: {commit_message}")
     print("改动文件:")
-    for change in file_changes:
-        change_type, file_path = change.split('\t', 1)
+    
+    # 遍历文件改动
+    for file_path in commit.stats.files:
         if file_path not in printed_files:
-            print(f"  类型: {change_type}\t路径: {file_path}")
+            print(f"  路径: {file_path}")
             printed_files.add(file_path)
             
             # 读取文件内容
