@@ -129,7 +129,7 @@ public class Singleton {
         return single;
     }
 }
-
+https://zhuanlan.zhihu.com/p/502550223?utm_id=0
 懒汉式，确实是在调用getInstance()方法时，才会初始化实例，实现了懒加载。但是在能否满足在多线程下正常工作呢？我们在这里先分析一下假设有两个线程ThreadA和ThreadB
 new Singleton()这个操作不是原子操作。至少可以分解成以下上个原子操作：
 
