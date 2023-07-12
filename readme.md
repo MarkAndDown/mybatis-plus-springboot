@@ -76,3 +76,119 @@ public void testSemaphore() throws Exception {
         }
         Thread.sleep(10000);
     }
+
+
+volatile: 可见性：
+volatile可以使得在多处理器环境下保证了共享变量的可见性，那么到底什么是可见性？     一般在单线程的环境下，如果向一个变量先写入一个值，然后在没有写干涉的情况下读取这个变量的值，那么这个时候读取到的这个变量的值应该是之前写入的那个值。 这本来是一件很正常的事件，但是在多线程环境下，读和写发生在不同的线程中的时候，可能会出现以下的情况：读线程不能及时的读取到其他线程写入的最新的值。这就是所谓的可见性，为了实现跨线程写入的内存可见性，必须要使用一些机制来实现，而volatile就是这样的一种机制。
+public class VolatileDemo {
+
+    public static void main(String[] args) throws InterruptedException {
+        VolatileTest test = new VolatileTest();
+        test.start();
+        for (; ; ) {
+            if (test.isFlag()) {
+                System.out.println("hi");
+            }
+        }
+    }
+}
+
+class VolatileTest extends Thread {
+    private /*volatile*/ boolean flag = false;
+
+    public boolean isFlag() {
+        return flag;
+    }
+
+    @Override
+    public void run() {
+        try {
+            Thread.sleep(1000);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        flag = true;
+        System.out.println("flag = " + flag);
+    }
+}
+
+指令重排：
+
+//懒汉式单例类.在第一次调用的时候实例化自己
+public class Singleton {
+      //私有的构造函数
+    private Singleton() {
+    }
+    //私有的静态变量
+    private static Singleton single =null;
+    //暴露的公有静态方法
+    public static Singleton getInstance() {
+        if (single == null) {  //line1
+            single=new Singleton(); //line2
+        }
+        return single;
+    }
+}
+
+懒汉式，确实是在调用getInstance()方法时，才会初始化实例，实现了懒加载。但是在能否满足在多线程下正常工作呢？我们在这里先分析一下假设有两个线程ThreadA和ThreadB
+new Singleton()这个操作不是原子操作。至少可以分解成以下上个原子操作：
+
+1.分配内存空间
+2.初始化对象
+3.将对象指向分配好的地址空间（执行完之后就不再是null了）
+其中第2，3步在一些编译器中为了优化单线程中的执行性能是可以重排的。重排之后就是这样的：
+
+　　1.分配内存空间
+　　3.将对象指向分配好的地址空间（执行完之后就不再是null了）
+　　2.初始化对象
+重排之后就有可能出现上边分析的情况：
+
+
+原子性：
+public class Test1 {
+
+     public static volatile  int a=0;
+    public static void main(String[] args) throws InterruptedException {
+        new Thread(()->{
+            for (int i =0;i<10000;i++){
+                a++;
+            }
+        }).start();
+
+        new Thread(()->{
+            for (int i =0;i<10000;i++){
+                a++;
+            }
+        }).start();
+        Thread.sleep(1000);
+        System.out.println("a value = "+ a);
+    }
+
+}
+
+
+
+
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class Test2 {
+
+     public static AtomicInteger a =new AtomicInteger(0);
+
+    public static void main(String[] args) throws InterruptedException {
+        new Thread(()->{
+            for (int i =0;i<10000;i++){
+                a.incrementAndGet();
+            }
+        }).start();
+
+        new Thread(()->{
+            for (int i =0;i<10000;i++){
+                a.incrementAndGet();
+            }
+        }).start();
+        Thread.sleep(1000);
+        System.out.println("a value = "+ a);
+    }
+
+}
