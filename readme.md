@@ -7,7 +7,7 @@ CountDownLatch作用：就是等待其他线程执行完任务，并且必要时
 
 下面是CountDownLatch简单实用：
 
- public void testCountDownLaunch() throws InterruptedException{
+     public void testCountDownLaunch() throws InterruptedException{
         CountDownLatch countLatch  = new CountDownLatch(10);
         for(int i = 0;i < 10;i++){
             new Thread(()-> {
@@ -19,6 +19,7 @@ CountDownLatch作用：就是等待其他线程执行完任务，并且必要时
         countLatch.await();
         System.out.println("发射 。。。。。。");
     }
+
 
 CyclicBarrier:
 可以让一组线程达到一个屏障时被阻塞，直到最后一个线程到达屏障时，所有线程才可以继续执行；根据字面意思就是回环栅栏，其实就是可以重复使用的意思
