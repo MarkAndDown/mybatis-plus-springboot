@@ -1,5 +1,6 @@
 import git
 import re
+from datetime import datetime, timedelta
 
 # 设置Git仓库路径
 repo_path = '/path/to/your/git/repo'
@@ -7,11 +8,14 @@ repo_path = '/path/to/your/git/repo'
 # 创建Git仓库对象
 repo = git.Repo(repo_path)
 
+# 计算一个月前的日期
+one_month_ago = datetime.now() - timedelta(days=30)
+
 # 用于存储匹配的提交记录
 matching_commits = []
 
-# 遍历提交记录
-for commit in repo.iter_commits():
+# 遍历最近一个月的提交记录
+for commit in repo.iter_commits(since=one_month_ago):
     commit_message = commit.message.lower()  # 将提交备注转为小写，以便进行匹配
 
     # 检查提交备注是否包含 "PPP-111"
