@@ -26,6 +26,7 @@ def load_parameters_from_file():
             date_threshold_var.set(params.get('date_threshold', ''))
     except Exception as e:
         messagebox.showerror("错误", f"读取参数文件时出错：{e}")
+
 def save_parameters_to_file():
     try:
         with open("parameter.txt", "w") as file:
@@ -42,92 +43,103 @@ def save_parameters_to_file():
     except Exception as e:
         messagebox.showerror("错误", f"保存参数时出错：{e}")
 
-def download_and_organize_files():
-    # SSH连接信息
-    hostname = hostname_var.get()
-    port = int(port_var.get())
-    username = username_var.get()
-    password = password_var.get()
+def download_files():
+    try:
+        # SSH连接信息
+        hostname = hostname_var.get()
+        port = int(port_var.get())
+        username = username_var.get()
+        password = password_var.get()
 
-    # 远程文件夹路径
-    remote_folder = remote_folder_var.get()
+        # 远程文件夹路径
+        remote_folder = remote_folder_var.get()
 
-    # 本地保存路径
-    local_folder = local_folder_var.get()
+        # 本地保存路径
+        local_folder = local_folder_var.get()
 
-    # 指定的目标文件夹路径
-    instance_folder = instance_folder_var.get()
+        # 指定日期
+        date_threshold = datetime.strptime(date_threshold_var.get(), "%Y-%m-%d")
 
-    # 新位置
-    new_location = new_location_var.get()
+        # 建立SSH连接
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh_client.connect(hostname, port, username, password)
 
-    # 指定日期
-    date_threshold = datetime.strptime(date_threshold_var.get(), "%Y-%m-%d")
+        # 建立SFTP连接
+        sftp_client = ssh_client.open_sftp()
 
-    # 建立SSH连接
-    ssh_client = paramiko.SSHClient()
-    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh_client.connect(hostname, port, username, password)
+        # 下载文件
+        for file_attr in sftp_client.listdir_attr(remote_folder):
+            file_name = file_attr.filename
+            remote_filepath = os.path.join(remote_folder, file_name)
+            try:
+                # 获取文件的修改时间
+                mtime = file_attr.st_mtime
+                file_modification_time = datetime.fromtimestamp(mtime)
+                
+                # 如果文件修改时间在指定日期之后，则下载文件
+                if file_modification_time >= date_threshold:
+                    local_filepath = os.path.join(local_folder, file_name)
+                    sftp_client.get(remote_filepath, local_filepath)
+                    print(f'Downloaded: {file_name}')
+            except Exception as e:
+                print(f'Error downloading {file_name}: {e}')
 
-    # 建立SFTP连接
-    sftp_client = ssh_client.open_sftp()
+        # 关闭连接
+        sftp_client.close()
+        ssh_client.close()
 
-    # 下载文件
-    for file_attr in sftp_client.listdir_attr(remote_folder):
-        file_name = file_attr.filename
-        remote_filepath = os.path.join(remote_folder, file_name)
-        try:
-            # 获取文件的修改时间
-            mtime = file_attr.st_mtime
-            file_modification_time = datetime.fromtimestamp(mtime)
-            
-            # 如果文件修改时间在指定日期之后，则下载文件
-            if file_modification_time >= date_threshold:
-                local_filepath = os.path.join(local_folder, file_name)
-                sftp_client.get(remote_filepath, local_filepath)
-                print(f'Downloaded: {file_name}')
-        except Exception as e:
-            print(f'Error downloading {file_name}: {e}')
+        messagebox.showinfo("完成", "文件下载完成！")
+    except Exception as e:
+        messagebox.showerror("错误", f"下载文件时出错：{e}")
 
-    # 关闭连接
-    sftp_client.close()
-    ssh_client.close()
+def organize_files():
+    try:
+        # 本地保存路径
+        local_folder = local_folder_var.get()
 
-    # 整理文件
-    for root, dirs, files in os.walk(instance_folder):
-        for file in files:
-            relative_path = os.path.relpath(os.path.join(root, file), instance_folder)
-            source_path = os.path.join(local_folder, file)
-            target_path = os.path.join(new_location, relative_path)
-            
-            # 检查本地文件是否存在
-            if os.path.exists(source_path):
-                # 如果文件名是 ".数字" 这样的格式，则删除文件
-                if re.match(r'\.\d+$', file):
-                    os.remove(source_path)
-                    print(f'Removed {file} from {local_folder}')
+        # 指定的目标文件夹路径
+        instance_folder = instance_folder_var.get()
+
+        # 新位置
+        new_location = new_location_var.get()
+
+        # 整理文件
+        for root, dirs, files in os.walk(instance_folder):
+            for file in files:
+                relative_path = os.path.relpath(os.path.join(root, file), instance_folder)
+                source_path = os.path.join(local_folder, file)
+                target_path = os.path.join(new_location, relative_path)
+                
+                # 检查本地文件是否存在
+                if os.path.exists(source_path):
+                    # 如果文件名是 ".数字" 这样的格式，则删除文件
+                    if re.match(r'\.\d+$', file):
+                        os.remove(source_path)
+                        print(f'Removed {file} from {local_folder}')
+                    else:
+                        # 创建目标文件夹
+                        target_folder_path = os.path.dirname(target_path)
+                        os.makedirs(target_folder_path, exist_ok=True)
+                        # 移动文件到目标位置
+                        shutil.move(source_path, target_path)
+                        print(f'Moved {file} to {target_path}')
                 else:
-                    # 创建目标文件夹
-                    target_folder_path = os.path.dirname(target_path)
-                    os.makedirs(target_folder_path, exist_ok=True)
-                    # 移动文件到目标位置
-                    shutil.move(source_path, target_path)
-                    print(f'Moved {file} to {target_path}')
-            else:
-                print(f'File {file} does not exist in the local folder.')
+                    print(f'File {file} does not exist in the local folder.')
 
-    print('文件整理完成。')
+        print('文件整理完成。')
 
-    # 删除local_folder中的文件名是一个 ".数字" 这样的文件
-    for file in os.listdir(local_folder):
-        if re.match(r'\.\d+$', file):
-            os.remove(os.path.join(local_folder, file))
-            print(f'Removed {file} from {local_folder}')
+        # 删除local_folder中的文件名是一个 ".数字" 这样的文件
+        for file in os.listdir(local_folder):
+            if re.match(r'\.\d+$', file):
+                os.remove(os.path.join(local_folder, file))
+                print(f'Removed {file} from {local_folder}')
 
-    print('删除完成。')
+        print('删除完成。')
 
-    # 弹出提示框，告知用户整理已经完成
-    messagebox.showinfo("完成", "文件整理完成！")
+        messagebox.showinfo("完成", "文件整理完成！")
+    except Exception as e:
+        messagebox.showerror("错误", f"整理文件时出错：{e}")
 
 # 创建Tkinter窗口
 root = tk.Tk()
