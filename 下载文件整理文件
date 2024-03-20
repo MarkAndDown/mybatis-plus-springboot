@@ -202,8 +202,11 @@ password = 'your_password'
 remote_folder = r'C:\path\to\remote\folder'  # 远程文件夹路径，需要使用原始字符串表示法（r''）
 
 # 创建 COM 对象，连接到远程 Windows 主机
-wmi = win32com.client.GetObject("winmgmts:{impersonationLevel=impersonate}!//" + hostname)
-files = wmi.ExecQuery("Select * from CIM_DataFile where Drive='C:' and Path='{0}'".format(remote_folder.replace("\\", "\\\\")))
+wmi = win32com.client.Dispatch("WbemScripting.SWbemLocator")
+swbem_services = wmi.ConnectServer(hostname, "root\cimv2", username, password)
+
+# 查询远程文件夹下的文件
+files = swbem_services.ExecQuery("Select * from CIM_DataFile where Drive='C:' and Path='{0}'".format(remote_folder.replace("\\", "\\\\")))
 
 # 输出文件列表
 print("远程文件夹下的文件:")
@@ -215,3 +218,4 @@ for file in files:
 
 # 关闭连接
 wmi = None
+
