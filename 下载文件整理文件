@@ -189,3 +189,42 @@ tk.Button(root, text="保存参数", command=save_parameters_to_file).grid(row=9
 
 # 运行窗口主循环
 root.mainloop()
+
+
+
+
+from winrm.protocol import Protocol
+
+# WinRM 连接信息
+hostname = 'your_windows_hostname_or_ip'
+username = 'your_username'
+password = 'your_password'
+
+# 建立 WinRM 连接
+winrm_session = Protocol(
+    endpoint=f'http://{hostname}:5985/wsman',
+    transport='ntlm',
+    username=username,
+    password=password,
+    server_cert_validation='ignore'
+)
+
+# 执行远程命令
+command = 'dir'  # 你要执行的命令
+shell_id = 'http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd'
+command_id = 'http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd'
+
+# 创建远程 shell
+shell = winrm_session.open_shell(shell_id)
+
+# 执行命令
+command_result = winrm_session.run_command(shell_id, command_id, shell, command)
+stdout, stderr, status_code = winrm_session.get_command_output(shell_id, command_id, shell)
+
+# 打印命令输出
+print("STDOUT:", stdout)
+print("STDERR:", stderr)
+print("Status Code:", status_code)
+
+# 关闭远程 shell
+winrm_session.cleanup_command(shell_id, command_id, shell)
