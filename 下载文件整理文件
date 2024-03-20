@@ -26,6 +26,21 @@ def load_parameters_from_file():
             date_threshold_var.set(params.get('date_threshold', ''))
     except Exception as e:
         messagebox.showerror("错误", f"读取参数文件时出错：{e}")
+def save_parameters_to_file():
+    try:
+        with open("parameter.txt", "w") as file:
+            file.write(f"hostname={hostname_var.get()}\n")
+            file.write(f"port={port_var.get()}\n")
+            file.write(f"username={username_var.get()}\n")
+            file.write(f"password={password_var.get()}\n")
+            file.write(f"remote_folder={remote_folder_var.get()}\n")
+            file.write(f"local_folder={local_folder_var.get()}\n")
+            file.write(f"instance_folder={instance_folder_var.get()}\n")
+            file.write(f"new_location={new_location_var.get()}\n")
+            file.write(f"date_threshold={date_threshold_var.get()}\n")
+        messagebox.showinfo("完成", "参数保存成功！")
+    except Exception as e:
+        messagebox.showerror("错误", f"保存参数时出错：{e}")
 
 def download_and_organize_files():
     # SSH连接信息
