@@ -192,39 +192,26 @@ root.mainloop()
 
 
 
+import os
+import win32com.client
 
-from winrm.protocol import Protocol
-
-# WinRM 连接信息
+# 远程 Windows 主机信息
 hostname = 'your_windows_hostname_or_ip'
 username = 'your_username'
 password = 'your_password'
+remote_folder = r'C:\path\to\remote\folder'  # 远程文件夹路径，需要使用原始字符串表示法（r''）
 
-# 建立 WinRM 连接
-winrm_session = Protocol(
-    endpoint=f'http://{hostname}:5985/wsman',
-    transport='ntlm',
-    username=username,
-    password=password,
-    server_cert_validation='ignore'
-)
+# 创建 COM 对象，连接到远程 Windows 主机
+wmi = win32com.client.GetObject("winmgmts:{impersonationLevel=impersonate}!//" + hostname)
+files = wmi.ExecQuery("Select * from CIM_DataFile where Drive='C:' and Path='{0}'".format(remote_folder.replace("\\", "\\\\")))
 
-# 执行远程命令
-command = 'dir'  # 你要执行的命令
-shell_id = 'http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd'
-command_id = 'http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd'
+# 输出文件列表
+print("远程文件夹下的文件:")
+for file in files:
+    print("文件名:", file.Name)
+    print("路径:", os.path.join(remote_folder, file.Name))
+    print("大小:", file.FileSize)
+    print("")
 
-# 创建远程 shell
-shell = winrm_session.open_shell(shell_id)
-
-# 执行命令
-command_result = winrm_session.run_command(shell_id, command_id, shell, command)
-stdout, stderr, status_code = winrm_session.get_command_output(shell_id, command_id, shell)
-
-# 打印命令输出
-print("STDOUT:", stdout)
-print("STDERR:", stderr)
-print("Status Code:", status_code)
-
-# 关闭远程 shell
-winrm_session.cleanup_command(shell_id, command_id, shell)
+# 关闭连接
+wmi = None
