@@ -201,6 +201,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 import paramiko
+import time
 
 class LogViewer:
     def __init__(self, master):
@@ -227,7 +228,7 @@ class LogViewer:
 
         ttk.Button(master, text="Connect", command=self.connect_to_server).grid(row=5, column=0, columnspan=2)
 
-        self.log_text = ScrolledText(master, state='disabled', wrap='word', height=10)
+        self.log_text = ScrolledText(master, state='normal', wrap='word', height=10)
         self.log_text.grid(row=6, column=0, columnspan=2, sticky='nsew')
 
         self.filter_var = tk.StringVar(value="INFO")
@@ -248,14 +249,12 @@ class LogViewer:
 
             # 打开远程日志文件
             self.channel = self.ssh.invoke_shell()
-            self.channel.send(f"tail -f {self.log_file_path_var.get()}\n")
+            self.channel.send(f"tail -f {self.log_file_path_var.get()} > local_log.log &\n")
 
             self.update_logs()
         except Exception as e:
-            self.log_text.configure(state='normal')
             self.log_text.delete(1.0, tk.END)
             self.log_text.insert(tk.END, f"Error: {str(e)}\n")
-            self.log_text.configure(state='disabled')
 
     def update_logs(self):
         if self.channel is None:
@@ -265,15 +264,22 @@ class LogViewer:
             if self.channel.recv_ready():
                 logs = self.channel.recv(1024).decode('utf-8')
 
+                # 写入本地日志文件
+                with open("local_log.log", "a") as f:
+                    f.write(logs)
+
+                # 读取本地日志文件
+                with open("local_log.log", "r") as f:
+                    logs = f.read()
+
                 # 进行日志筛选
                 filtered_logs = self.filter_logs(logs)
 
                 # 显示日志
                 self.display_logs(filtered_logs)
         except Exception as e:
-            self.log_text.configure(state='normal')
+            self.log_text.delete(1.0, tk.END)
             self.log_text.insert(tk.END, f"Error: {str(e)}\n")
-            self.log_text.configure(state='disabled')
 
         # 每隔一段时间更新日志
         self.master.after(5000, self.update_logs)
@@ -290,9 +296,8 @@ class LogViewer:
         return '\n'.join(filtered_logs)
 
     def display_logs(self, logs):
-        self.log_text.configure(state='normal')
+        self.log_text.delete(1.0, tk.END)
         self.log_text.insert(tk.END, logs)
-        self.log_text.configure(state='disabled')
         self.log_text.see(tk.END)  # 自动滚动到最新日志
 
 def main():
