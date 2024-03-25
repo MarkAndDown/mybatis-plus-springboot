@@ -192,30 +192,118 @@ root.mainloop()
 
 
 
-import os
-import win32com.client
+import tkinter as tk
+from tkinter import ttk
+from tkinter.scrolledtext import ScrolledText
+import paramiko
+import time
 
-# 远程 Windows 主机信息
-hostname = 'your_windows_hostname_or_ip'
-username = 'your_username'
-password = 'your_password'
-remote_folder = r'C:\path\to\remote\folder'  # 远程文件夹路径，需要使用原始字符串表示法（r''）
+class LogViewer:
+    def __init__(self, master):
+        self.master = master
+        master.title("Log Viewer")
 
-# 创建 COM 对象，连接到远程 Windows 主机
-wmi = win32com.client.Dispatch("WbemScripting.SWbemLocator")
-swbem_services = wmi.ConnectServer(hostname, "root\cimv2", username, password)
+        # SSH 连接参数输入框
+        self.host_var = tk.StringVar()
+        self.port_var = tk.StringVar()
+        self.username_var = tk.StringVar()
+        self.password_var = tk.StringVar()
+        self.log_file_path_var = tk.StringVar()
 
-# 查询远程文件夹下的文件
-files = swbem_services.ExecQuery("Select * from CIM_DataFile where Drive='C:' and Path='{0}'".format(remote_folder.replace("\\", "\\\\")))
+        ttk.Label(master, text="Host:").grid(row=0, column=0)
+        ttk.Entry(master, textvariable=self.host_var).grid(row=0, column=1)
+        ttk.Label(master, text="Port:").grid(row=1, column=0)
+        ttk.Entry(master, textvariable=self.port_var).grid(row=1, column=1)
+        ttk.Label(master, text="Username:").grid(row=2, column=0)
+        ttk.Entry(master, textvariable=self.username_var).grid(row=2, column=1)
+        ttk.Label(master, text="Password:").grid(row=3, column=0)
+        ttk.Entry(master, textvariable=self.password_var, show="*").grid(row=3, column=1)
+        ttk.Label(master, text="Log File Path:").grid(row=4, column=0)
+        ttk.Entry(master, textvariable=self.log_file_path_var).grid(row=4, column=1)
 
-# 输出文件列表
-print("远程文件夹下的文件:")
-for file in files:
-    print("文件名:", file.Name)
-    print("路径:", os.path.join(remote_folder, file.Name))
-    print("大小:", file.FileSize)
-    print("")
+        ttk.Button(master, text="Connect", command=self.connect_to_server).grid(row=5, column=0, columnspan=2)
 
-# 关闭连接
-wmi = None
+        self.log_text = ScrolledText(master, state='disabled', wrap='word', height=10)
+        self.log_text.grid(row=6, column=0, columnspan=2, sticky='nsew')
+
+        self.filter_var = tk.StringVar()
+        self.filter_var.set("INFO")
+        ttk.Label(master, text="Log Level Filter:").grid(row=7, column=0)
+        ttk.Combobox(master, textvariable=self.filter_var, values=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]).grid(row=7, column=1)
+
+        # 初始化 SSH 客户端
+        self.ssh = None
+        self.sftp = None
+
+    def connect_to_server(self):
+        try:
+            # 创建 SSH 客户端
+            self.ssh = paramiko.SSHClient()
+            self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.ssh.connect(hostname=self.host_var.get(), port=int(self.port_var.get()), 
+                             username=self.username_var.get(), password=self.password_var.get())
+
+            # 创建 SFTP 客户端
+            self.sftp = self.ssh.open_sftp()
+
+            self.update_logs()
+        except Exception as e:
+            self.log_text.configure(state='normal')
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.insert(tk.END, f"Error: {str(e)}\n")
+            self.log_text.configure(state='disabled')
+
+    def update_logs(self):
+        if self.sftp is None:
+            return
+
+        try:
+            remote_file = self.sftp.file(self.log_file_path_var.get(), 'r')
+            remote_file.seek(0, 2)  # 定位到文件末尾
+            file_size = remote_file.tell()
+
+            if file_size > 1024 * 1024:  # 如果文件大小超过 1 MB，则只读取最后 1 MB
+                remote_file.seek(-1024 * 1024, 2)
+
+            logs = remote_file.read().decode('utf-8')
+
+            # 进行日志筛选
+            filtered_logs = self.filter_logs(logs)
+
+            # 显示日志
+            self.display_logs(filtered_logs)
+
+            remote_file.close()
+        except Exception as e:
+            self.log_text.configure(state='normal')
+            self.log_text.insert(tk.END, f"Error: {str(e)}\n")
+            self.log_text.configure(state='disabled')
+
+        # 每隔一段时间更新日志
+        self.master.after(5000, self.update_logs)
+
+    def filter_logs(self, logs):
+        # 进行日志筛选，仅保留指定日志级别的日志
+        selected_level = self.filter_var.get()
+        filtered_logs = []
+        for line in logs.split('\n'):
+            if selected_level in line:
+                filtered_logs.append(line)
+        return '\n'.join(filtered_logs)
+
+    def display_logs(self, logs):
+        self.log_text.configure(state='normal')
+        self.log_text.delete(1.0, tk.END)  # 清空日志框
+        self.log_text.insert(tk.END, logs)
+        self.log_text.configure(state='disabled')
+        self.log_text.see(tk.END)  # 自动滚动到最新日志
+
+def main():
+    root = tk.Tk()
+    log_viewer = LogViewer(root)
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
+
 
