@@ -1,0 +1,89 @@
+import tkinter as tk
+from tkinter import ttk
+from tkinter.scrolledtext import ScrolledText
+import paramiko
+import threading
+
+class LogViewer:
+    def __init__(self, master):
+        self.master = master
+        master.title("Log Viewer")
+
+        # SSH 连接参数输入框
+        self.host_var = tk.StringVar(value="your_host")
+        self.port_var = tk.StringVar(value="22")
+        self.username_var = tk.StringVar(value="your_username")
+        self.password_var = tk.StringVar(value="your_password")
+        self.log_file_path_var = tk.StringVar(value="path_to_your_log_file")
+
+        ttk.Label(master, text="Host:").grid(row=0, column=0)
+        ttk.Entry(master, textvariable=self.host_var).grid(row=0, column=1)
+        ttk.Label(master, text="Port:").grid(row=1, column=0)
+        ttk.Entry(master, textvariable=self.port_var).grid(row=1, column=1)
+        ttk.Label(master, text="Username:").grid(row=2, column=0)
+        ttk.Entry(master, textvariable=self.username_var).grid(row=2, column=1)
+        ttk.Label(master, text="Password:").grid(row=3, column=0)
+        ttk.Entry(master, textvariable=self.password_var, show="*").grid(row=3, column=1)
+        ttk.Label(master, text="Log File Path:").grid(row=4, column=0)
+        ttk.Entry(master, textvariable=self.log_file_path_var).grid(row=4, column=1)
+
+        ttk.Button(master, text="Connect", command=self.connect_to_server).grid(row=5, column=0, columnspan=2)
+        ttk.Button(master, text="Quit", command=self.quit_application).grid(row=6, column=0, columnspan=2)
+
+        self.log_text = ScrolledText(master, state='normal', wrap='word', height=10)
+        self.log_text.grid(row=7, column=0, columnspan=2, sticky='nsew')
+
+        # 初始化 SSH 客户端
+        self.ssh = None
+        self.channel = None
+        self.stop_event = threading.Event()
+
+    def connect_to_server(self):
+        try:
+            # 创建 SSH 客户端
+            self.ssh = paramiko.SSHClient()
+            self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.ssh.connect(hostname=self.host_var.get(), port=int(self.port_var.get()), 
+                             username=self.username_var.get(), password=self.password_var.get())
+
+            # 执行 tail -f 命令获取实时日志
+            self.channel = self.ssh.invoke_shell()
+            self.channel.send(f"tail -f {self.log_file_path_var.get()} | grep -E '(ERROR)|(^$)'\n")
+
+            # 启动线程实时获取日志
+            threading.Thread(target=self.receive_logs, daemon=True).start()
+        except Exception as e:
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.insert(tk.END, f"Error: {str(e)}\n")
+
+    def receive_logs(self):
+        try:
+            while not self.stop_event.is_set():
+                if self.channel.recv_ready():
+                    logs = self.channel.recv(1024).decode('utf-8')
+
+                    # 显示日志
+                    self.display_logs(logs)
+        except Exception as e:
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.insert(tk.END, f"Error: {str(e)}\n")
+
+    def display_logs(self, logs):
+        self.log_text.insert(tk.END, logs)
+        self.log_text.see(tk.END)  # 自动滚动到最新日志
+
+    def quit_application(self):
+        if self.channel:
+            self.channel.close()
+        if self.ssh:
+            self.ssh.close()
+        self.stop_event.set()
+        self.master.quit()
+
+def main():
+    root = tk.Tk()
+    log_viewer = LogViewer(root)
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
