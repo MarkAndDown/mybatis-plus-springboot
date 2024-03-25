@@ -199,12 +199,10 @@ root.mainloop()
 
 
 
-
 import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 import paramiko
-import os
 
 class LogViewer:
     def __init__(self, master):
@@ -309,3 +307,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
