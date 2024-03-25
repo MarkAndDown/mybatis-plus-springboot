@@ -225,6 +225,7 @@ class LogViewer:
         ttk.Entry(master, textvariable=self.log_file_path_var).grid(row=4, column=1)
 
         ttk.Button(master, text="Connect", command=self.connect_to_server).grid(row=5, column=0, columnspan=2)
+        ttk.Button(master, text="Quit", command=self.quit_application).grid(row=8, column=0, columnspan=2)
 
         self.log_text = ScrolledText(master, state='normal', wrap='word', height=10)
         self.log_text.grid(row=6, column=0, columnspan=2, sticky='nsew')
@@ -297,6 +298,14 @@ class LogViewer:
         self.log_text.insert(tk.END, logs)
         self.log_text.see(tk.END)  # 自动滚动到最新日志
 
+    def quit_application(self):
+        if self.channel:
+            self.channel.close()
+        if self.ssh:
+            self.ssh.close()
+        self.stop_event.set()
+        self.master.quit()
+
 def main():
     root = tk.Tk()
     log_viewer = LogViewer(root)
@@ -304,3 +313,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
