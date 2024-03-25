@@ -34,8 +34,9 @@ class LogViewer:
         self.log_text.grid(row=6, column=0, columnspan=2, sticky='nsew')
 
         self.filter_var = tk.StringVar(value="ERROR")
+        self.filter_var.trace_add("write", self.refresh_logs)
         ttk.Label(master, text="Log Level Filter:").grid(row=7, column=0)
-        ttk.Combobox(master, textvariable=self.filter_var, values=["ERROR", "ALL"]).grid(row=7, column=1)
+        ttk.Combobox(master, textvariable=self.filter_var, values=["ALL", "ERROR"]).grid(row=7, column=1)
 
         # 初始化 SSH 客户端
         self.ssh = None
@@ -50,9 +51,10 @@ class LogViewer:
             self.ssh.connect(hostname=self.host_var.get(), port=int(self.port_var.get()), 
                              username=self.username_var.get(), password=self.password_var.get())
 
-            # 执行 tail -f 命令获取实时日志
+            # 执行 tail -n 2000 -f 命令获取实时日志
+            command = f"tail -n 2000 -f {self.log_file_path_var.get()}"
             self.channel = self.ssh.invoke_shell()
-            self.channel.send(f"tail -n 2000 -f {self.log_file_path_var.get()}\n")
+            self.channel.send(command + "\n")
 
             # 启动线程实时获取日志
             threading.Thread(target=self.receive_logs, daemon=True).start()
@@ -62,33 +64,19 @@ class LogViewer:
 
     def receive_logs(self):
         try:
-            with open("local.log", "w") as f:
-                while not self.stop_event.is_set():
-                    if self.channel.recv_ready():
-                        logs = self.channel.recv(1024).decode('utf-8')
-
-                        # 写入本地日志文件
-                        f.write(logs)
-
-                        # 显示日志
-                        self.display_logs(logs)
-
+            while not self.stop_event.is_set():
+                if self.channel.recv_ready():
+                    logs = self.channel.recv(1024).decode('utf-8')
+                    filtered_logs = self.filter_logs(logs)
+                    self.log_text.insert(tk.END, filtered_logs)
+                    self.log_text.see(tk.END)
         except Exception as e:
             self.log_text.delete(1.0, tk.END)
             self.log_text.insert(tk.END, f"Error: {str(e)}\n")
 
-    def display_logs(self, logs):
-        # 如果日志级别筛选是 "ERROR"，则只显示包含 ERROR 的日志
-        if self.filter_var.get() == "ERROR":
-            if "ERROR" in logs:
-                self.log_text.insert(tk.END, logs)
-        # 如果日志级别筛选是 "ALL"，则显示所有日志
-        elif self.filter_var.get() == "ALL":
-            self.log_text.insert(tk.END, logs)
-
-        # 自动滚动到最新日志
-        self.log_text.see(tk.END)
-
+    def refresh_logs(self, *args):
+        self.log_text.delete(1.0, tk.END)
+        
     def quit_application(self):
         if self.channel:
             self.channel.close()
@@ -96,6 +84,14 @@ class LogViewer:
             self.ssh.close()
         self.stop_event.set()
         self.master.quit()
+
+    def filter_logs(self, logs):
+        selected_level = self.filter_var.get()
+        if selected_level == "ERROR":
+            filtered_logs = [line for line in logs.split("\n") if "ERROR" in line]
+        else:
+            filtered_logs = logs.split("\n")
+        return "\n".join(filtered_logs)
 
 def main():
     root = tk.Tk()
