@@ -200,11 +200,11 @@ root.mainloop()
 
 
 
-
 import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 import paramiko
+import os
 
 class LogViewer:
     def __init__(self, master):
@@ -241,6 +241,7 @@ class LogViewer:
         # 初始化 SSH 客户端
         self.ssh = None
         self.sftp = None
+        self.last_position = 0
 
     def connect_to_server(self):
         try:
@@ -266,7 +267,9 @@ class LogViewer:
 
         try:
             remote_file = self.sftp.file(self.log_file_path_var.get(), 'r')
+            remote_file.seek(self.last_position)
             logs = remote_file.read().decode('utf-8')
+            self.last_position = remote_file.tell()
             remote_file.close()
 
             # 进行日志筛选
@@ -295,7 +298,6 @@ class LogViewer:
 
     def display_logs(self, logs):
         self.log_text.configure(state='normal')
-        self.log_text.delete(1.0, tk.END)  # 清空日志框
         self.log_text.insert(tk.END, logs)
         self.log_text.configure(state='disabled')
         self.log_text.see(tk.END)  # 自动滚动到最新日志
@@ -307,4 +309,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
