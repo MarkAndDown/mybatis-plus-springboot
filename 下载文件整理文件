@@ -194,14 +194,12 @@ root.mainloop()
 
 
 
-
-
-
 import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 import paramiko
 import time
+import threading
 
 class LogViewer:
     def __init__(self, master):
@@ -238,6 +236,7 @@ class LogViewer:
         # 初始化 SSH 客户端
         self.ssh = None
         self.channel = None
+        self.stop_event = threading.Event()
 
     def connect_to_server(self):
         try:
@@ -247,42 +246,40 @@ class LogViewer:
             self.ssh.connect(hostname=self.host_var.get(), port=int(self.port_var.get()), 
                              username=self.username_var.get(), password=self.password_var.get())
 
-            # 打开远程日志文件
+            # 执行 tail -f 命令获取实时日志
             self.channel = self.ssh.invoke_shell()
-            self.channel.send(f"tail -f {self.log_file_path_var.get()} > local_log.log &\n")
+            self.channel.send(f"tail -f {self.log_file_path_var.get()}\n")
 
-            self.update_logs()
+            # 启动线程实时获取日志
+            threading.Thread(target=self.receive_logs, daemon=True).start()
         except Exception as e:
             self.log_text.delete(1.0, tk.END)
             self.log_text.insert(tk.END, f"Error: {str(e)}\n")
 
-    def update_logs(self):
-        if self.channel is None:
-            return
-
+    def receive_logs(self):
         try:
-            if self.channel.recv_ready():
-                logs = self.channel.recv(1024).decode('utf-8')
+            while not self.stop_event.is_set():
+                if self.channel.recv_ready():
+                    logs = self.channel.recv(1024).decode('utf-8')
 
-                # 写入本地日志文件
-                with open("local_log.log", "a") as f:
-                    f.write(logs)
+                    # 写入本地日志文件
+                    with open("local_log.log", "a") as f:
+                        f.write(logs)
 
-                # 读取本地日志文件
-                with open("local_log.log", "r") as f:
-                    logs = f.read()
+                    # 读取本地日志文件
+                    with open("local_log.log", "r") as f:
+                        logs = f.read()
 
-                # 进行日志筛选
-                filtered_logs = self.filter_logs(logs)
+                    # 进行日志筛选
+                    filtered_logs = self.filter_logs(logs)
 
-                # 显示日志
-                self.display_logs(filtered_logs)
+                    # 显示日志
+                    self.display_logs(filtered_logs)
+
+                time.sleep(0.1)
         except Exception as e:
             self.log_text.delete(1.0, tk.END)
             self.log_text.insert(tk.END, f"Error: {str(e)}\n")
-
-        # 每隔一段时间更新日志
-        self.master.after(5000, self.update_logs)
 
     def filter_logs(self, logs):
         # 进行日志筛选，仅保留指定日志级别的日志
