@@ -197,8 +197,6 @@ root.mainloop()
 
 
 
-
-
 import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
@@ -238,8 +236,7 @@ class LogViewer:
 
         # 初始化 SSH 客户端
         self.ssh = None
-        self.sftp = None
-        self.last_position = 0
+        self.channel = None
 
     def connect_to_server(self):
         try:
@@ -249,8 +246,9 @@ class LogViewer:
             self.ssh.connect(hostname=self.host_var.get(), port=int(self.port_var.get()), 
                              username=self.username_var.get(), password=self.password_var.get())
 
-            # 创建 SFTP 客户端
-            self.sftp = self.ssh.open_sftp()
+            # 打开远程日志文件
+            self.channel = self.ssh.invoke_shell()
+            self.channel.send(f"tail -f {self.log_file_path_var.get()}\n")
 
             self.update_logs()
         except Exception as e:
@@ -260,21 +258,18 @@ class LogViewer:
             self.log_text.configure(state='disabled')
 
     def update_logs(self):
-        if self.sftp is None:
+        if self.channel is None:
             return
 
         try:
-            remote_file = self.sftp.file(self.log_file_path_var.get(), 'r')
-            remote_file.seek(self.last_position)
-            logs = remote_file.read().decode('utf-8')
-            self.last_position = remote_file.tell()
-            remote_file.close()
+            if self.channel.recv_ready():
+                logs = self.channel.recv(1024).decode('utf-8')
 
-            # 进行日志筛选
-            filtered_logs = self.filter_logs(logs)
+                # 进行日志筛选
+                filtered_logs = self.filter_logs(logs)
 
-            # 显示日志
-            self.display_logs(filtered_logs)
+                # 显示日志
+                self.display_logs(filtered_logs)
         except Exception as e:
             self.log_text.configure(state='normal')
             self.log_text.insert(tk.END, f"Error: {str(e)}\n")
@@ -307,4 +302,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
