@@ -3,6 +3,7 @@ from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 import paramiko
 import threading
+import os
 
 class LogViewer:
     def __init__(self, master):
@@ -43,6 +44,14 @@ class LogViewer:
         self.channel = None
         self.stop_event = threading.Event()
 
+        # 创建本地日志文件
+        self.create_local_log_file()
+
+    def create_local_log_file(self):
+        if not os.path.exists("local.log"):
+            with open("local.log", "w") as f:
+                f.write("")
+
     def connect_to_server(self):
         try:
             # 创建 SSH 客户端
@@ -64,12 +73,15 @@ class LogViewer:
 
     def receive_logs(self):
         try:
+            local_log_file = open("local.log", "a")  # 以追加模式打开本地日志文件
             while not self.stop_event.is_set():
                 if self.channel.recv_ready():
                     logs = self.channel.recv(1024).decode('utf-8')
                     filtered_logs = self.filter_logs(logs)
                     self.log_text.insert(tk.END, filtered_logs)
+                    local_log_file.write(filtered_logs)  # 写入本地日志文件
                     self.log_text.see(tk.END)
+            local_log_file.close()
         except Exception as e:
             self.log_text.delete(1.0, tk.END)
             self.log_text.insert(tk.END, f"Error: {str(e)}\n")
