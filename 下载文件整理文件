@@ -192,11 +192,19 @@ root.mainloop()
 
 
 
+
+
+
+
+
+
+
+
+
 import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 import paramiko
-import time
 
 class LogViewer:
     def __init__(self, master):
@@ -204,11 +212,11 @@ class LogViewer:
         master.title("Log Viewer")
 
         # SSH 连接参数输入框
-        self.host_var = tk.StringVar()
-        self.port_var = tk.StringVar()
-        self.username_var = tk.StringVar()
-        self.password_var = tk.StringVar()
-        self.log_file_path_var = tk.StringVar()
+        self.host_var = tk.StringVar(value="your_host")
+        self.port_var = tk.StringVar(value="22")
+        self.username_var = tk.StringVar(value="your_username")
+        self.password_var = tk.StringVar(value="your_password")
+        self.log_file_path_var = tk.StringVar(value="path_to_your_log_file")
 
         ttk.Label(master, text="Host:").grid(row=0, column=0)
         ttk.Entry(master, textvariable=self.host_var).grid(row=0, column=1)
@@ -226,10 +234,9 @@ class LogViewer:
         self.log_text = ScrolledText(master, state='disabled', wrap='word', height=10)
         self.log_text.grid(row=6, column=0, columnspan=2, sticky='nsew')
 
-        self.filter_var = tk.StringVar()
-        self.filter_var.set("INFO")
+        self.filter_var = tk.StringVar(value="INFO")
         ttk.Label(master, text="Log Level Filter:").grid(row=7, column=0)
-        ttk.Combobox(master, textvariable=self.filter_var, values=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]).grid(row=7, column=1)
+        ttk.Combobox(master, textvariable=self.filter_var, values=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL", "ALL"]).grid(row=7, column=1)
 
         # 初始化 SSH 客户端
         self.ssh = None
@@ -259,21 +266,14 @@ class LogViewer:
 
         try:
             remote_file = self.sftp.file(self.log_file_path_var.get(), 'r')
-            remote_file.seek(0, 2)  # 定位到文件末尾
-            file_size = remote_file.tell()
-
-            if file_size > 1024 * 1024:  # 如果文件大小超过 1 MB，则只读取最后 1 MB
-                remote_file.seek(-1024 * 1024, 2)
-
             logs = remote_file.read().decode('utf-8')
+            remote_file.close()
 
             # 进行日志筛选
             filtered_logs = self.filter_logs(logs)
 
             # 显示日志
             self.display_logs(filtered_logs)
-
-            remote_file.close()
         except Exception as e:
             self.log_text.configure(state='normal')
             self.log_text.insert(tk.END, f"Error: {str(e)}\n")
@@ -285,6 +285,8 @@ class LogViewer:
     def filter_logs(self, logs):
         # 进行日志筛选，仅保留指定日志级别的日志
         selected_level = self.filter_var.get()
+        if selected_level == "ALL":
+            return logs
         filtered_logs = []
         for line in logs.split('\n'):
             if selected_level in line:
@@ -305,5 +307,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
