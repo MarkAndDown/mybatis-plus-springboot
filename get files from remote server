@@ -1,32 +1,27 @@
-from smb.SMBConnection import SMBConnection
-from nmb.NetBIOS import NetBIOS
-import os
+import paramiko
 
 # 远程服务器信息
 server_ip = "remote_server_ip"
-server_name = "remote_server_name"  # 远程服务器NetBIOS名称
+server_port = 22  # 默认的SFTP端口
 username = "your_username"
 password = "your_password"
-share_name = "C$"  # 共享名称，例如C$代表C盘
-folder_path = "path\\to\\folder"  # 远程文件夹路径，例如"Users\\Public\\Documents"
+folder_path = "path/to/folder"  # 远程文件夹路径，例如 "/home/user/Documents"
 
-# 创建NetBIOS对象以解决服务器名称
-bios = NetBIOS()
-server_name_resolved = bios.queryIPForName(server_ip)
-if not server_name_resolved:
-    print("无法解析服务器名称")
-    exit()
-
-server_name = server_name_resolved[0]
+# 创建SSH客户端
+ssh = paramiko.SSHClient()
+ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
 # 连接到远程服务器
-conn = SMBConnection(username, password, "my_machine_name", server_name, use_ntlm_v2=True)
-assert conn.connect(server_ip, 139)
+ssh.connect(server_ip, port=server_port, username=username, password=password)
+
+# 创建SFTP会话
+sftp = ssh.open_sftp()
 
 # 列出文件夹中的文件
-files = conn.listPath(share_name, folder_path)
+files = sftp.listdir(folder_path)
 for file in files:
-    print(file.filename)
+    print(file)
 
-# 关闭连接
-conn.close()
+# 关闭SFTP会话和SSH连接
+sftp.close()
+ssh.close()
