@@ -1,49 +1,32 @@
-from smbprotocol.connection import Connection
-from smbprotocol.session import Session
-from smbprotocol.tree import TreeConnect
-from smbprotocol.open import Open, CreateDisposition, ShareAccess, FileAttributes, FileInformationClass
-from smbprotocol.directory import QueryDirectoryFlags
+from smb.SMBConnection import SMBConnection
+from nmb.NetBIOS import NetBIOS
+import os
 
 # 远程服务器信息
-server_name = "remote_server_ip_or_name"
 server_ip = "remote_server_ip"
+server_name = "remote_server_name"  # 远程服务器NetBIOS名称
 username = "your_username"
 password = "your_password"
 share_name = "C$"  # 共享名称，例如C$代表C盘
 folder_path = "path\\to\\folder"  # 远程文件夹路径，例如"Users\\Public\\Documents"
 
+# 创建NetBIOS对象以解决服务器名称
+bios = NetBIOS()
+server_name_resolved = bios.queryIPForName(server_ip)
+if not server_name_resolved:
+    print("无法解析服务器名称")
+    exit()
+
+server_name = server_name_resolved[0]
+
 # 连接到远程服务器
-connection = Connection(uuid="unique_connection_uuid", server_name=server_name, ip_address=server_ip)
-connection.connect()
-
-# 建立会话
-session = Session(connection, username=username, password=password)
-session.connect()
-
-# 连接到共享
-tree = TreeConnect(session, share_name)
-tree.connect()
-
-# 打开远程文件夹
-directory = Open(tree, folder_path, FileAttributes.FILE_ATTRIBUTE_DIRECTORY)
-directory.create(
-    disposition=CreateDisposition.FILE_OPEN,
-    share_access=ShareAccess.FILE_SHARE_READ | ShareAccess.FILE_SHARE_WRITE | ShareAccess.FILE_SHARE_DELETE
-)
+conn = SMBConnection(username, password, "my_machine_name", server_name, use_ntlm_v2=True)
+assert conn.connect(server_ip, 139)
 
 # 列出文件夹中的文件
-query_dir_result = directory.query_directory(
-    file_information_class=FileInformationClass.FILE_NAMES_INFORMATION,
-    flags=QueryDirectoryFlags.SL_RETURN_SINGLE_ENTRY,
-    search_pattern="*"
-)
+files = conn.listPath(share_name, folder_path)
+for file in files:
+    print(file.filename)
 
-# 输出文件名
-for file_info in query_dir_result:
-    print(file_info['file_name'].get_value())
-
-# 关闭远程文件夹
-directory.close()
-tree.disconnect()
-session.disconnect()
-connection.disconnect()
+# 关闭连接
+conn.close()
