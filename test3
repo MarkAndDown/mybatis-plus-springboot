@@ -1,0 +1,53 @@
+import paramiko
+import time
+
+class RemoteServer:
+    def __init__(self):
+        self.ssh = None
+        self.channel = None
+
+    def connect(self, server_ip, username, password):
+        try:
+            self.ssh = paramiko.SSHClient()
+            self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.ssh.connect(server_ip, username=username, password=password)
+            self.channel = self.ssh.invoke_shell()  # 打开一个交互式 shell
+            return True
+        except Exception as e:
+            print(f"Connection failed: {e}")
+            return False
+
+    def disconnect(self):
+        if self.channel:
+            self.channel.close()
+        if self.ssh:
+            self.ssh.close()
+
+    def interact(self, commands, timeout=10):
+        for command in commands:
+            if self.channel:
+                self.channel.send(command + '\n')
+                time.sleep(2)  # 等待命令执行
+                output = self.channel.recv(4096).decode('utf-8')
+                print(output)  # 打印输出
+                time.sleep(1)  # 确保命令完全执行
+
+# 创建远程服务器对象
+remote_server = RemoteServer()
+
+# 登录到服务器
+server_ip = 'your_server_ip'
+username = 'your_username'
+password = 'your_password'
+
+if remote_server.connect(server_ip, username, password):
+    # 定义与服务器交互的命令
+    commands = [
+        '1',  # 选择第一个选项
+        '2',  # 选择第二个选项
+        'y'   # 确认或继续
+    ]
+    remote_server.interact(commands)
+    remote_server.disconnect()
+else:
+    print("Login failed.")
