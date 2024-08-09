@@ -1,8 +1,9 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext
+from tkinter import ttk, messagebox, scrolledtext
 import git
 import paramiko
 import os
+import tarfile
 from datetime import datetime
 import threading
 
@@ -10,7 +11,6 @@ class RemoteServer:
     def __init__(self):
         self.ssh = None
         self.sftp = None
-        self.channel = None
         self.running = False
 
     def connect(self, server_ip, username, password):
@@ -18,58 +18,44 @@ class RemoteServer:
             self.ssh = paramiko.SSHClient()
             self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             self.ssh.connect(server_ip, username=username, password=password)
-            self.channel = self.ssh.invoke_shell()
+            self.sftp = self.ssh.open_sftp()
             self.running = True
             return True
         except Exception as e:
-            messagebox.showerror("Error", f"Connection failed: {e}")
-            return False
+            return str(e)
 
     def disconnect(self):
         if self.sftp:
             self.sftp.close()
-        if self.channel:
-            self.channel.close()
         if self.ssh:
             self.ssh.close()
         self.running = False
 
-    def execute_command(self, command, log_text_widget, log_file_path):
+    def upload_folder_as_tar(self, local_folder_path, remote_path):
         try:
-            self.channel.send(command + '\n')
-            time.sleep(2)
-            output = self.channel.recv(4096).decode('utf-8')
-            log_text_widget.insert(tk.END, output)
-            log_text_widget.see(tk.END)
-            with open(log_file_path, 'a') as log_file:
-                log_file.write(output)
+            # 将本地目录打包成.tar.gz文件
+            tar_path = local_folder_path + ".tar.gz"
+            with tarfile.open(tar_path, "w:gz") as tar:
+                tar.add(local_folder_path, arcname=os.path.basename(local_folder_path))
+
+            # 上传tar.gz文件
+            remote_tar_path = os.path.join(remote_path, os.path.basename(tar_path))
+            self.sftp.put(tar_path, remote_tar_path)
+            
+            # 解压缩tar.gz文件
+            command = f"tar -xzf {remote_tar_path} -C {remote_path}"
+            stdin, stdout, stderr = self.ssh.exec_command(command)
+            stdout.channel.recv_exit_status()  # 等待解压完成
+            
+            # 删除远程tar.gz文件
+            self.ssh.exec_command(f"rm {remote_tar_path}")
+            
+            # 删除本地tar.gz文件
+            os.remove(tar_path)
+            
+            return "Upload and extraction completed."
         except Exception as e:
-            messagebox.showerror("Error", f"Command execution failed: {e}")
-
-    def interact(self, command, log_text_widget, log_file_path):
-        if not self.running:
-            return
-        
-        self.channel.send(command + '\n')
-        time.sleep(2)  # 等待命令执行
-        output = self.channel.recv(4096).decode('utf-8')
-        log_text_widget.insert(tk.END, output)
-        log_text_widget.see(tk.END)
-        with open(log_file_path, 'a') as log_file:
-            log_file.write(output)
-
-    def read_initial_output(self, log_text_widget, log_file_path):
-        if not self.running:
-            return
-
-        # 读取登录后的初始输出
-        time.sleep(2)  # 确保登录过程有时间完成
-        output = self.channel.recv(4096).decode('utf-8')
-        if output:
-            log_text_widget.insert(tk.END, output)
-            log_text_widget.see(tk.END)
-            with open(log_file_path, 'a') as log_file:
-                log_file.write(output)
+            return str(e)
 
 # 功能1：从Git仓库中提取两个commit之间的代码
 def extract_commits():
@@ -117,32 +103,15 @@ def upload_to_server():
         messagebox.showerror("Error", "Please fill in all fields")
         return
 
-    try:
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(server_ip, username=server_username, password=server_password)
-        sftp = ssh.open_sftp()
-        
-        for root, dirs, files in os.walk(local_path):
-            for file in files:
-                local_file = os.path.join(root, file)
-                remote_file = os.path.join(remote_path, os.path.relpath(local_file, local_path))
-                remote_dir = os.path.dirname(remote_file)
-                try:
-                    sftp.stat(remote_dir)
-                except FileNotFoundError:
-                    sftp.mkdir(remote_dir)
-                with open(local_file, 'rb') as f:
-                    sftp.putfo(f, remote_file)
-        
-        sftp.close()
-        ssh.close()
-        
-        messagebox.showinfo("Completed", "File upload completed")
-    except Exception as e:
-        messagebox.showerror("Error", f"Upload failed: {e}")
+    result = remote_server.connect(server_ip, server_username, server_password)
+    if result is True:
+        result = remote_server.upload_folder_as_tar(local_path, remote_path)
+        messagebox.showinfo("Completed", result)
+    else:
+        messagebox.showerror("Error", f"Upload failed: {result}")
+    remote_server.disconnect()
 
-# 功能3：连接远程服务器并交互
+# 功能3：连接远程服务器并提交作业
 def login_server():
     server_ip = entry_job_server_ip.get()
     server_username = entry_job_server_username.get()
@@ -152,18 +121,22 @@ def login_server():
         messagebox.showerror("Error", "Please fill in all fields")
         return
     
-    if remote_server.connect(server_ip, server_username, server_password):
+    result = remote_server.connect(server_ip, server_username, server_password)
+    if result is True:
         log_text.insert(tk.END, "Login successful\n")
         log_file_path = "server_log.txt"  # 保存日志的文件
         threading.Thread(target=remote_server.read_initial_output, args=(log_text, log_file_path)).start()
+    else:
+        messagebox.showerror("Error", f"Connection failed: {result}")
 
 def send_command(event=None):
-    command = entry_job_command.get()
-    if command.strip() == "":
+    job_command = entry_job_command.get()
+    if not job_command:
+        messagebox.showerror("Error", "Please enter a command")
         return
-    entry_job_command.delete(0, tk.END)
+    
     log_file_path = "server_log.txt"  # 保存日志的文件
-    threading.Thread(target=remote_server.interact, args=(command, log_text, log_file_path)).start()
+    threading.Thread(target=remote_server.interact, args=(job_command, log_text, log_file_path)).start()
 
 # 创建主窗口
 root = tk.Tk()
@@ -237,11 +210,6 @@ frame3 = ttk.Frame(notebook)
 notebook.add(frame3, text="Interactive Job")
 
 label_job_server_ip = tk.Label(frame3, text="Job Server IP:")
-label_job_server_ip# 第三个标签：交互作业
-frame3 = ttk.Frame(notebook)
-notebook.add(frame3, text="Interactive Job")
-
-label_job_server_ip = tk.Label(frame3, text="Job Server IP:")
 label_job_server_ip.pack()
 entry_job_server_ip = tk.Entry(frame3, width=40)
 entry_job_server_ip.pack(pady=5)
@@ -259,24 +227,4 @@ entry_job_server_password.pack(pady=5)
 button_login = tk.Button(frame3, text="Login", command=login_server)
 button_login.pack(pady=5)
 
-label_job_command = tk.Label(frame3, text="Job Command:")
-label_job_command.pack()
-entry_job_command = tk.Entry(frame3, width=40)
-entry_job_command.pack(pady=5)
-entry_job_command.bind("<Return>", send_command)
-
-button_submit = tk.Button(frame3, text="Submit Command", command=send_command)
-button_submit.pack(pady=5)
-
-log_text = scrolledtext.ScrolledText(frame3, width=60, height=20)
-log_text.pack(pady=5)
-
-button_disconnect = tk.Button(frame3, text="Disconnect", command=remote_server.disconnect)
-button_disconnect.pack(pady=5)
-
-# 创建远程服务器对象
-remote_server = RemoteServer()
-
-# 运行主窗口
-root.mainloop()
-
+label_job_command = tk.Label(frame3, text="Job
